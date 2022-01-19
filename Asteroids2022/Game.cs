@@ -10,6 +10,7 @@ using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,8 +18,9 @@ using System.Threading.Tasks;
 
 namespace Asteroids2022
 {
-    public class Game : GameWindow
+    public partial class Game : GameWindow
     {
+
         #region Shader things
 
         public struct Shader
@@ -97,9 +99,20 @@ namespace Asteroids2022
             3.0f, -1.0f, 0.0f
         };
 
+        Stopwatch sw;
+        double ellapsedtime;
+        double deltat;
+
         public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
         }
+
+        int uiResolution = -1;
+        int utplaypos = -1;
+        int utplayangle = -1;
+        int ucampos = -1;
+        int ubullets = -1;
+        int ubullnumb = -1;
 
         protected override void OnLoad()
         {
@@ -118,6 +131,20 @@ namespace Asteroids2022
 
             sprog = ShaderProgram.Load("Resources/Screen.vert", "Resources/Screen.frag");
             GL.UseProgram(sprog.id);
+
+            uiResolution = GL.GetUniformLocation(sprog.id, "iResolution");
+            utplaypos = GL.GetUniformLocation(sprog.id, "tplaypos");
+            utplayangle = GL.GetUniformLocation(sprog.id, "tplayangle");
+            ucampos = GL.GetUniformLocation(sprog.id, "campos");
+            ubullets = GL.GetUniformLocation(sprog.id, "bullets");
+            ubullnumb = GL.GetUniformLocation(sprog.id, "bullnumb");
+
+            for(int i = 0; i < 32; i++)
+            {
+                TPLAYER.Bullet.LIST[i] = new TPLAYER.Bullet() { vel = Vector2.Zero, mass = 100.0f, pos = Vector2.Zero };
+            }
+
+            sw = Stopwatch.StartNew();
         }
 
         protected override void OnResize(ResizeEventArgs e)
@@ -126,6 +153,9 @@ namespace Asteroids2022
 
             GL.Viewport(0, 0, e.Width, e.Height);
         }
+
+        TPLAYER player = new TPLAYER();
+        Vector2 campos = new Vector2(0.0f, 0.0f);
 
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
@@ -139,6 +169,32 @@ namespace Asteroids2022
                 Close();
             }
             #endregion
+
+            deltat = sw.ElapsedMilliseconds / 1000.0 - ellapsedtime;
+            ellapsedtime += deltat;
+
+            if(KeyboardState.IsKeyDown(Keys.Up))
+            {
+                player.acc = new Vector2((float)(Math.Cos(player.angle)), (float)Math.Sin(player.angle)) * 0.1f;
+            }
+            if(KeyboardState.IsKeyDown(Keys.Left))
+            {
+                player.avel = 2.0;
+            }
+            if(KeyboardState.IsKeyDown(Keys.Right))
+            {
+                player.avel = -2.0;
+            }
+            if(KeyboardState.IsKeyPressed(Keys.F))
+            {
+                Vector2 dir = new Vector2((float)Math.Cos(player.angle), (float)Math.Sin(player.angle));
+                TPLAYER.Bullet.Spawn(player.pos, dir * 1f + player.vel);
+            }
+
+            player.DoPhysics((float)deltat);
+            TPLAYER.Bullet.Update((float)deltat);
+
+            campos += (player.pos - campos) * (float)deltat * (player.pos - campos).Length * 5.0f;
         }
 
         protected override void OnRenderFrame(FrameEventArgs args)
@@ -152,11 +208,20 @@ namespace Asteroids2022
 
             GL.UseProgram(sprog.id);
 
+            GL.Uniform2(uiResolution, Size);
+            GL.Uniform2(utplaypos, player.pos);
+            GL.Uniform1(utplayangle, (float)player.angle);
+            GL.Uniform2(ucampos, campos);
+            GL.Uniform1(ubullnumb, TPLAYER.Bullet.COUNT);
+
+            GL.Uniform2(ubullets, 32, TPLAYER.Bullet.posses);
+
             GL.BindVertexArray(vao);
 
             GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
 
             //=============================================================================//
+
             SwapBuffers();
         }
     }
